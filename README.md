@@ -81,6 +81,7 @@ Then put the address `wrangler deploy` printed into `site/js/config.js` and push
 | How Claude is told to tidy a meal | `SYSTEM` in `pipeline/organize.mjs` (bump `VERSION` so cached meals are redone) |
 | The checks on Claude's answer | `problemsWith` and `settle` in `pipeline/organize.mjs` |
 | Which Claude model tidies | `ORGANIZER_MODEL` (default `claude-opus-5-5`) |
+| The most the cleanup may spend per day | `ORGANIZER_DAILY_USD` (default 1.5); today's total is in `pipeline/cache/spend.json` |
 | How many days ahead | `DAYS` (default 8) |
 | Colors and layout | the `<style>` block in `site/index.html` |
 | Views, filters, day and meal picking | `site/js/app.js` |

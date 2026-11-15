@@ -99,6 +99,10 @@ async function viaServer(onText) {
     for (const line of lines) {
       if (!line.trim()) continue;
       const event = JSON.parse(line);
+      if (event.needKey) {
+        sharedSpent = true;
+        throw new AskError(`${event.error} To keep asking now, you can use a Claude key of your own.`, { needKey: true });
+      }
       if (event.error) throw new AskError(event.error);
       if (event.text) onText((text += event.text));
     }

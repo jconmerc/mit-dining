@@ -73,11 +73,11 @@ export class Meter extends DurableObject {
   }
 
   // Swaps the hold for what the answer really cost.
-  async settle(day, cost) {
+  async settle(day, cost, answered = false) {
     const record = await this.#today();
     if (record.day !== day) return;
     record.spent = Math.max(0, record.spent - HOLD + cost);
-    record.answered += 1;
+    if (answered) record.answered += 1;
     await this.ctx.storage.put("day", record);
   }
 
@@ -192,6 +192,7 @@ export default {
 
     const answer = async () => {
       let cost = HOLD; // if Claude's count never arrives, the hold stands
+      let answered = false;
       try {
         const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL || undefined, maxRetries: 1 });
         const stream = client.messages.stream({
@@ -204,14 +205,22 @@ export default {
         stream.on("text", (delta) => send({ text: delta }));
         const message = await stream.finalMessage();
         cost = costOf(message.usage);
-        if (message.stop_reason === "refusal") await send({ error: "Claude declined to answer that one." });
+        answered = message.stop_reason !== "refusal";
+        if (!answered) await send({ error: "Claude declined to answer that one." });
       } catch (err) {
-        if (err instanceof Anthropic.APIError && err.status >= 400 && err.status < 500) cost = 0; // turned away before any work was done
         const busy = err instanceof Anthropic.RateLimitError || (err instanceof Anthropic.APIError && err.status >= 500);
-        await send({ error: busy ? "Claude is busy right now. Try again in a minute." : "Something went wrong getting an answer." }).catch(() => {});
+        // Any other refusal from Claude means the key itself was turned away:
+        // wrong, out of credit, or over its own spending limit. Nothing was
+        // spent, and the page offers the visitor their own key instead.
+        const keyOut = err instanceof Anthropic.APIError && err.status >= 400 && err.status < 500 && !busy;
+        if (keyOut) cost = 0;
+        const line = keyOut
+          ? { error: "The shared question box is out of credit for now.", needKey: true }
+          : { error: busy ? "Claude is busy right now. Try again in a minute." : "Something went wrong getting an answer." };
+        await send(line).catch(() => {});
         console.error("ask failed:", err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err);
       } finally {
-        await meter.settle(pass.day, cost);
+        await meter.settle(pass.day, cost, answered);
         await writer.close().catch(() => {});
       }
     };

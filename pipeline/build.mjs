@@ -20,6 +20,9 @@ const DATA = path.join(here, "..", "site", "data");
 const CACHE = path.join(here, "cache");
 const DAYS = Number(process.env.DAYS || 8);
 const useClaude = !process.env.NO_CLAUDE && Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+// The most the cleanup may spend on Claude in one day, across every run that
+// day. Meals past the cap are tidied by rules and picked up on a later day.
+const DAILY_CAP = Number(process.env.ORGANIZER_DAILY_USD || 1.5);
 
 const readJson = (file, fallback) => {
   try {
@@ -99,9 +102,22 @@ async function main() {
     else todo.push({ key, hit, ...job });
   }
   console.log(`${wanted.size} distinct meals, ${todo.length} to organise`);
+
+  // What Claude has already cost today, from earlier runs.
+  const spend = readJson(path.join(CACHE, "spend.json"), {});
+  const before = spend[today] || 0;
+  const withinCap = () => before + costSoFar() < DAILY_CAP;
+  let capped = 0;
+  if (useClaude && !withinCap()) console.log(`Today's Claude budget ($${DAILY_CAP.toFixed(2)}) is already spent; using rules for new meals.`);
+
   let done = 0;
+  // The soonest days come first, so a tight budget goes to the meals people
+  // are about to eat. Four calls run at once, so a run can pass the cap by
+  // the cost of the few already in flight.
   await pool(todo, 4, async ({ key, hit, hall, meal }) => {
-    const result = await organizeMeal(hall.name, meal, { useClaude });
+    const allowed = useClaude && withinCap();
+    if (useClaude && !allowed) capped++;
+    const result = await organizeMeal(hall.name, meal, { useClaude: allowed });
     // Don't let a failed retry replace a better copy from an earlier run.
     if (result.by === "rules" && hit && hit.by !== "rules") {
       organized.set(key, hit);
@@ -119,7 +135,7 @@ async function main() {
   const labels = new Set();
   for (const day of good) for (const meal of day.meals) for (const st of meal.stations) for (const i of st.items) if (!i.featured && i.label) labels.add(i.label);
   const unnamed = [...labels].filter((l) => !(l in names)).sort();
-  if (unnamed.length && useClaude) {
+  if (unnamed.length && useClaude && withinCap()) {
     console.log(`Cleaning ${unnamed.length} standing-bar names`);
     Object.assign(names, await cleanNames(unnamed));
     writeJson(path.join(CACHE, "names.json"), names);
@@ -186,12 +202,16 @@ async function main() {
     }
   }
   writeJson(path.join(CACHE, "index.json"), index);
+  spend[today] = Number((before + costSoFar()).toFixed(4));
+  for (const day of Object.keys(spend)) if (day < cutoff) delete spend[day];
+  writeJson(path.join(CACHE, "spend.json"), spend);
   writeJson(path.join(DATA, "index.json"), {
     generated: new Date().toISOString(),
     source: SOURCE,
     dates,
     halls: HALLS.map((h) => ({ id: h.id, name: h.name })),
-    organizer: useClaude && !unavailable ? MODEL : "rules",
+    organizer: stats.byClaude ? MODEL : "rules",
+    spentToday: spend[today],
     stats: { ...stats, failedPages: fetched.length - good.length },
   });
 
@@ -210,6 +230,7 @@ async function main() {
     const unread = fetched.length - good.length;
     if (!useClaude) console.log("::warning title=No Claude key::Add the ANTHROPIC_API_KEY secret to get the cleaned-up menus. These were tidied by rules only.");
     else if (unavailable) console.log(`::warning title=Claude key refused::${unavailable} Menus were tidied by rules only.`);
+    else if (capped) console.log(`::notice title=Daily Claude budget reached::$${spend[today].toFixed(2)} of $${DAILY_CAP.toFixed(2)} spent today. ${capped} meals were tidied by rules and will be redone on a later day.`);
     else if (stats.byRules) console.log(`::warning title=Some meals fell back to rules::${stats.byRules} of ${stats.meals} meals failed the checks and were tidied by rules.`);
     if (unread) console.log(`::warning title=Pages not read::${unread} hall pages could not be read; the last saved copy was kept.`);
     if (process.env.GITHUB_STEP_SUMMARY) {
