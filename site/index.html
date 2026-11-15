@@ -88,12 +88,13 @@
   .meals .side { margin-left: auto; display: flex; gap: 4px; }
 
   /* One hall in the side-by-side view. */
-  .hall { padding: 16px 0 18px; border-top: 1px solid var(--line); }
+  .hall { position: relative; padding: 16px 0 18px; border-top: 1px solid var(--line); }
   .hall header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; }
   .hall header b { font-size: 18px; font-weight: 600; }
   .hall header .hrs { color: var(--soft); }
   .hall header .live { color: var(--good); }
-  .hall header .plain { margin-left: auto; font-size: 14px; }
+  .hall .full { position: absolute; right: 0; top: 19px; font-size: 14px; }
+  .hall header { padding-right: 84px; }
   .hall.shut { color: var(--soft); }
   .heads { list-style: none; margin: 8px 0 0; padding: 0; columns: 2; column-gap: 28px; }
   .heads li { break-inside: avoid; padding: 2px 0; }
@@ -114,9 +115,10 @@
   .parts, .more { margin: 1px 0 4px; color: var(--soft); font-size: 14px; }
   .parts s { text-decoration: none; opacity: .4; }
   button.parts { all: unset; display: block; margin: 1px 0 4px; color: var(--soft); font-size: 14px; cursor: pointer; }
-  button.parts.fold { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  button.parts.fold:hover { color: var(--ink); }
+  button.parts.long:not(.open) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  button.parts.long:not(.open):hover { color: var(--ink); }
   button.parts:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .quick, details.filters, .hours-m { display: none; }
   .sum { margin: 0; padding: 12px 0; border-top: 1px solid var(--line); font: italic 17px/1.4 "Iowan Old Style", Palatino, Georgia, serif; }
   details.always { border-top: 1px solid var(--line); }
   details.always summary { padding: 10px 0; cursor: pointer; }
@@ -136,29 +138,58 @@
   footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--ink); color: var(--soft); font-size: 13px; }
   footer p { margin: 0 0 3px; }
 
+  /* Phones: two pickers, one row of meals, then the menu. The filters and
+     the long lists stay folded until asked for. */
   @media (max-width: 760px) {
-    .page { padding: 22px 14px 22px; }
-    h1 { font-size: 32px; }
-    .fresh { margin-left: 0; width: 100%; }
-    .cols { grid-template-columns: minmax(0, 1fr); gap: 0; }
-    /* The side lists become rows of buttons above the menu. */
-    aside .box { margin-bottom: 12px; }
-    aside .bar { display: none; }
-    .menu { display: flex; gap: 4px; overflow-x: auto; }
-    .menu li { flex: none; }
-    .menu button { width: auto; flex-direction: column; align-items: center; gap: 0; padding: 5px 12px; }
-    .menu i { font-size: 11.5px; }
-    .boxbody { display: flex; gap: 6px; overflow-x: auto; }
-    .boxbody h4 { display: none; }
-    .chips { flex-wrap: nowrap; }
-    .chip { padding: 5px 12px; }
-    .chips + .chips { padding-left: 8px; border-left: 1px solid var(--line); }
-    main .box { margin-top: 8px; }
-    .heads { columns: 1; }
+    body { font-size: 16px; }
+    .page { padding: 18px 16px 24px; }
+    h1 { font-size: 30px; }
+    .fresh, .tries, .days, aside, #title { display: none; }
+    .ask { margin: 14px 0 16px; }
+    .askbar input, .keybox input, .go { height: 48px; border-radius: 8px; }
+    .cols { display: block; }
+
+    .quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .sel { position: relative; display: block; min-width: 0; }
+    .sel select { -webkit-appearance: none; appearance: none; width: 100%; height: 48px; padding: 0 32px 0 14px; border: 1px solid var(--ink); border-radius: 8px; background: var(--paper); color: var(--ink); font: inherit; font-weight: 600; text-overflow: ellipsis; }
+    .sel::after { content: ""; position: absolute; right: 15px; top: 50%; width: 8px; height: 8px; border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
+
+    .meals { flex-wrap: wrap; gap: 8px; margin-bottom: 2px; overflow: visible; }
+    .meals .pick { flex: 1 1 0; min-height: 46px; display: grid; place-items: center; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+    .meals .pick[aria-pressed=true] { border-color: var(--ink); background: var(--ink); }
+    .meals .side { display: none; }
+
+    details.filters { display: block; }
+    details.filters summary { padding: 12px 0; color: var(--soft); cursor: pointer; }
+    details.filters h4 { margin: 2px 0 8px; font-size: 14px; font-weight: 400; color: var(--soft); }
+    details.filters .chips { gap: 8px; margin-bottom: 14px; }
+    details.filters .chip { padding: 9px 16px; font-size: 15px; }
+
+    .hall { padding: 20px 0 22px; }
+    .hall header { padding-right: 0; gap: 2px 10px; }
+    .hall header b { font-size: 22px; }
+    .heads { columns: 1; margin-top: 10px; }
+    .heads li { padding: 4px 0; }
+    .heads .st, .more-count { display: none; }
+    .dn { font-size: 17px; }
+    .hall .full { position: static; display: block; box-sizing: border-box; width: 100%; margin-top: 14px; padding: 12px; border: 1px solid var(--ink); border-radius: 8px; text-align: center; text-decoration: none; font-size: 16px; font-weight: 600; }
+
+    .hours-m { display: block; margin: 0; padding: 12px 0 0; color: var(--soft); }
+    .sum { padding-top: 6px; border-top: 0; }
     .station, details.always dl, .wday { grid-template-columns: minmax(0, 1fr); }
-    .station > span, details.always dt { padding: 0 0 2px; font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
-    details.always dt { margin-top: 6px; }
-    .wday > .plain { margin-bottom: 4px; }
+    .station { padding: 14px 0; }
+    .station > span, details.always dt { padding: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+    .dishes li { padding: 4px 0; }
+    .dishes li.minor { font-size: 15px; }
+    .parts, .more, button.parts { font-size: 15px; }
+    button.parts.mid:not(.open) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+    details.always summary { padding: 14px 0; }
+    details.always dt { margin-top: 8px; }
+    details.always dl { font-size: 15px; }
+    .wday { padding: 16px 0; }
+    .wday > .plain { margin-bottom: 6px; font-size: 18px; }
+    .wday p { margin-bottom: 8px; }
+    .wday p span { display: block; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
   }
 </style>
 </head>
@@ -175,17 +206,22 @@
       <button class="go" id="askgo" type="submit">Ask</button>
     </form>
     <div class="tries" id="tries"></div>
+    <div class="chat" id="chat" hidden>
+      <div id="turns"></div>
+      <div class="chatfoot"><button class="plain" id="clear" type="button">Clear</button><button class="plain" id="forget" type="button" hidden>Forget my key</button></div>
+    </div>
     <div class="keybox" id="keybox" hidden>
       <p>Answers come from Claude, using your own API key. Paste it once and it stays in this browser. It is only ever sent to Anthropic. <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Get a key</a></p>
       <form id="keyform"><input id="keyin" type="password" autocomplete="off" placeholder="sk-ant-..." aria-label="Claude API key"><button class="go" type="submit">Save</button></form>
     </div>
-    <div class="chat" id="chat" hidden>
-      <div id="turns"></div>
-      <div class="chatfoot"><button class="plain" id="clear" type="button">Clear</button><button class="plain" id="forget" type="button">Forget my key</button></div>
-    </div>
   </section>
 
   <nav class="days" id="days" aria-label="Day"></nav>
+
+  <div class="quick">
+    <label class="sel"><select id="dayselect" aria-label="Day"></select></label>
+    <label class="sel"><select id="hallselect" aria-label="Hall"></select></label>
+  </div>
 
   <div class="cols">
     <aside>
@@ -196,7 +232,12 @@
       </div></div>
     </aside>
     <main>
-      <div class="box"><h2 class="bar" id="title">Menus</h2><div class="meals" id="meals" hidden></div><div id="view"><div class="none">Loading menus...</div></div></div>
+      <div class="box"><h2 class="bar" id="title">Menus</h2><div class="meals" id="meals" hidden></div>
+      <details class="filters"><summary id="filtercount">Filters</summary>
+        <h4>Only</h4><div class="chips" id="dietm"></div>
+        <h4>Without</h4><div class="chips" id="avoidm"></div>
+      </details>
+      <div id="view"><div class="none">Loading menus...</div></div></div>
     </main>
   </div>
 

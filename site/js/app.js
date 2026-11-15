@@ -1,7 +1,7 @@
 // The page: pick a day, a hall and a meal, and read the menu. With no hall
 // picked it shows every hall side by side for one meal, which is the usual
 // question ("where's dinner good tonight?").
-import { AskError, ask, forgetKey, hasKey, resetChat, saveKey } from "./ask.js";
+import { AskError, ask, canAsk, forgetKey, hasKey, resetChat, saveKey } from "./ask.js";
 
 const TIMEZONE = "America/New_York";
 const $ = (id) => document.getElementById(id);
@@ -148,10 +148,10 @@ function sideBySide() {
     const { list, rest } = headsFor(hall, meal);
     const items = list.map((x) => `<li><span class="dn">${esc(x.dish.name)}</span>${dietTag(hall, x.dish)} <span class="st">${esc(x.station)}</span></li>`).join("");
     rows.push(
-      `<section class="hall"><header><b>${esc(name)}</b><span class="hrs">${hours(meal)}</span>${live ? '<span class="live">open now</span>' : ""}` +
-        `<button class="plain" data-hall="${id}">Full menu</button></header>` +
+      `<section class="hall"><header><b>${esc(name)}</b><span class="hrs">${hours(meal)}</span>${live ? '<span class="live">open now</span>' : ""}</header>` +
         (items ? `<ul class="heads">${items}</ul>` : `<p class="also">Nothing here fits that filter.</p>`) +
-        (items && rest > 0 ? `<p class="also">and ${rest} more on the full menu${hall.stale ? " (not refreshed today)" : ""}</p>` : "") +
+        (items && rest > 0 ? `<p class="also more-count">and ${rest} more on the full menu${hall.stale ? " (not refreshed today)" : ""}</p>` : "") +
+        `<button class="plain full" data-hall="${id}">Full menu</button>` +
         `</section>`,
     );
   }
@@ -172,7 +172,8 @@ function dishRow(hall, dish) {
       return filtering() && !partFits(hall, p.id) ? `<s>${name}</s>` : name;
     });
     // A long list (the salad bar) starts folded to two lines; a tap opens it.
-    extra = parts.length > 14 ? `<button class="parts fold" aria-expanded="false">${parts.join(", ")}</button>` : `<div class="parts">${parts.join(", ")}</div>`;
+    const size = parts.length > 14 ? "long" : parts.length > 6 ? "mid" : "";
+    extra = size ? `<button class="parts ${size}" aria-expanded="false">${parts.join(", ")}</button>` : `<div class="parts">${parts.join(", ")}</div>`;
   } else {
     const item = hall.items[dish.parts[0].id] || { t: [] };
     const has = item.t.filter((t) => ALLERGEN_NAMES[t]).map((t) => ALLERGEN_NAMES[t]);
@@ -214,7 +215,7 @@ function oneHall() {
       `</dl></details>`
     : "";
   const sum = meal.summary && !filtering() ? `<p class="sum">${esc(meal.summary)}</p>` : "";
-  return sum + (stations || `<div class="none">Nothing on today's menu fits that filter.</div>`) + always;
+  return `<p class="hours-m">${esc(meal.label)}, ${hours(meal)}</p>` + sum + (stations || `<div class="none">Nothing on today's menu fits that filter.</div>`) + always;
 }
 
 function wholeWeek() {
@@ -257,8 +258,27 @@ function render() {
       })
       .join("");
 
-  $("diet").innerHTML = DIETS.map(([key, label]) => button("chip", `data-diet="${key}"`, key === state.diet, label)).join("");
-  $("avoid").innerHTML = AVOID.map(([key, label]) => button("chip", `data-avoid="${key}"`, state.avoid.has(key), label)).join("");
+  const dietChips = DIETS.map(([key, label]) => button("chip", `data-diet="${key}"`, key === state.diet, label)).join("");
+  const avoidChips = AVOID.map(([key, label]) => button("chip", `data-avoid="${key}"`, state.avoid.has(key), label)).join("");
+  $("diet").innerHTML = $("dietm").innerHTML = dietChips;
+  $("avoid").innerHTML = $("avoidm").innerHTML = avoidChips;
+  const active = (state.diet ? 1 : 0) + state.avoid.size;
+  $("filtercount").textContent = active ? `Filters (${active} on)` : "Filters";
+
+  // On a phone the day and the hall are two plain pickers.
+  const option = (value, label, chosen) => `<option value="${value}"${chosen ? " selected" : ""}>${esc(label)}</option>`;
+  const inWeek = Boolean(hall) && state.view === "week";
+  $("dayselect").innerHTML =
+    index.dates.map((d) => option(d, d === today || dayLabel(d, "short") === "Tomorrow" ? dayLabel(d, "short") : `${dayLabel(d, "short")}, ${dayLabel(d, "date")}`, !inWeek && d === state.date)).join("") + (hall ? option("week", "Whole week", inWeek) : "");
+  $("hallselect").innerHTML =
+    option("", "All halls", !state.hall) +
+    index.halls
+      .map(({ id, name }) => {
+        const h = halls[id];
+        const shut = state.date === today ? !status(h).open && status(h).text === "closed" : !(h && h.meals.length);
+        return option(id, shut ? `${name} (closed)` : name, id === state.hall);
+      })
+      .join("");
 
   const week = hall && state.view === "week";
   const meals = hall ? (halls[state.hall] || { meals: [] }).meals : mealsOn(state.date);
@@ -309,7 +329,7 @@ document.addEventListener("click", (event) => {
   if (!el) return;
   const d = el.dataset;
   if (el.classList.contains("parts")) {
-    el.setAttribute("aria-expanded", String(el.classList.toggle("fold") === false));
+    el.setAttribute("aria-expanded", String(el.classList.toggle("open")));
     return;
   }
   if (el.classList.contains("dish")) {
@@ -341,7 +361,7 @@ const format = (text) => esc(text).replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
 
 async function send(question) {
   if (!index) return;
-  if (!hasKey()) {
+  if (!canAsk()) {
     waiting = question;
     $("keybox").hidden = false;
     $("keyin").focus();
@@ -367,13 +387,14 @@ async function send(question) {
   } catch (err) {
     answer.className = "a bad";
     answer.textContent = err instanceof AskError ? err.message : "Something went wrong.";
-    if (err.badKey) {
-      forgetKey();
+    if (err.badKey) forgetKey();
+    if (err.badKey || err.needKey) {
       waiting = question;
       $("keybox").hidden = false;
     }
   } finally {
     $("askgo").disabled = false;
+    $("forget").hidden = !hasKey();
   }
 }
 
@@ -405,8 +426,20 @@ $("clear").addEventListener("click", () => {
 });
 $("forget").addEventListener("click", () => {
   forgetKey();
-  $("forget").textContent = "Key forgotten";
-  setTimeout(() => ($("forget").textContent = "Forget my key"), 2000);
+  $("forget").hidden = true;
+});
+$("dayselect").addEventListener("change", (event) => {
+  if (event.target.value === "week") state.view = "week";
+  else {
+    state.date = event.target.value;
+    state.view = "day";
+  }
+  render();
+});
+$("hallselect").addEventListener("change", (event) => {
+  state.hall = event.target.value;
+  state.view = "day";
+  render();
 });
 
 // ------------------------------------------------------------------- load

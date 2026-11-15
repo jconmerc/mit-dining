@@ -1,0 +1,23 @@
+{
+  // The shared question box's server, a Cloudflare Worker.
+  //   npx wrangler deploy                       publish it
+  //   npx wrangler secret put ANTHROPIC_API_KEY  give it the Claude key
+  "name": "mit-dining-ask",
+  "main": "ask.mjs",
+  "compatibility_date": "2026-06-01",
+  "observability": { "enabled": true },
+
+  // The limits. Change a number and deploy again.
+  "vars": {
+    "DAILY_BUDGET_USD": "1.00",          // everyone's questions together, per day
+    "QUESTIONS_PER_VISITOR": "25",       // per visitor, per day
+    "SECONDS_BETWEEN_QUESTIONS": "3",    // per visitor
+    "MAX_QUESTION_CHARS": "400",
+    "SITE": "https://jconmerc.github.io/mit-dining",
+    "ALLOWED_ORIGINS": "https://jconmerc.github.io"
+  },
+
+  // Keeps the day's running total.
+  "durable_objects": { "bindings": [{ "name": "METER", "class_name": "Meter" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Meter"] }]
+}

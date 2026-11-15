@@ -40,7 +40,38 @@ If the key is missing or refused, the run still publishes (tidied by rules) and 
 
 ## The question box
 
-Questions go from the browser straight to Claude (`claude-haiku-5-5`), with the week's menus as context. The key for that is pasted into the page by whoever is using it and is kept in that browser only. It is never in this repo or on the site.
+Questions are answered by Claude (`claude-haiku-5-5`) with the week's menus as context. There are two ways a question can get there:
+
+- **The ask server** in `worker/`, a small Cloudflare Worker that holds a Claude key so visitors don't need one. Set its address as `ASK_URL` in `site/js/config.js`.
+- **A visitor's own key**, pasted into the page and kept in that browser only. This is what the page falls back to when `ASK_URL` is empty or the day's shared budget has run out.
+
+No key is ever in this repo or in the page.
+
+### What keeps the ask server from running up a bill
+
+- **A daily budget shared by everyone** (`DAILY_BUDGET_USD`, default $1). Each answer's real cost, from the token counts Claude reports, is added to the day's total. Once the total reaches the budget, every request is refused until midnight in Cambridge.
+- **A daily cap per visitor** (`QUESTIONS_PER_VISITOR`, default 25) and a short wait between one visitor's questions.
+- **The server writes the prompt.** A caller can only send short plain-text questions. It can't pick the model, the instructions or the answer length, so the key can't be used as a free general-purpose Claude.
+- **Only this site's address** may call it from a browser.
+- **A spending limit on the key itself**, set in the Claude Console. Use a key made only for this, so that limit is the backstop if anything above fails.
+
+The limits are in `worker/wrangler.jsonc`. `https://<the worker's address>/today` shows the day's spend and question count.
+
+### Setting it up
+
+```bash
+cd worker && npm install
+```
+
+```bash
+npx wrangler deploy
+```
+
+```bash
+npx wrangler secret put ANTHROPIC_API_KEY
+```
+
+Then put the address `wrangler deploy` printed into `site/js/config.js` and push.
 
 ## Where to edit
 
@@ -53,7 +84,8 @@ Questions go from the browser straight to Claude (`claude-haiku-5-5`), with the 
 | How many days ahead | `DAYS` (default 8) |
 | Colors and layout | the `<style>` block in `site/index.html` |
 | Views, filters, day and meal picking | `site/js/app.js` |
-| How the question box answers | `RULES` in `site/js/context.js`, model in `site/js/ask.js` |
+| How the question box answers | `RULES` in `site/js/context.js` |
+| The shared budget and per-visitor limits | `vars` in `worker/wrangler.jsonc` |
 | The Claude SDK the page loads | `npm run vendor` rebuilds `site/js/anthropic.js` |
 
 Unofficial. Menus, diet labels and allergen labels are MIT Dining's own.
