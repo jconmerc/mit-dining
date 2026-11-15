@@ -1,0 +1,20 @@
+{
+  "name": "mit-dining",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "menus": "node pipeline/build.mjs",
+    "vendor": "esbuild pipeline/browser-sdk.mjs --bundle --format=esm --minify --target=es2022 --outfile=site/js/anthropic.js",
+    "serve": "python3 -m http.server 5210 --bind 127.0.0.1 --directory site"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

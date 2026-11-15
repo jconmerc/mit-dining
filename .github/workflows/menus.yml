@@ -1,0 +1,71 @@
+# Refreshes the menus and republishes the site.
+#
+# Runs twice a day, whenever the code changes, and on demand from the Actions
+# tab. Needs one repository secret, ANTHROPIC_API_KEY, for the cleanup step.
+# Without it the menus are still published, tidied by plain rules.
+name: Menus
+
+on:
+  schedule:
+    - cron: "20 9 * * *" # about 4:20 or 5:20 am in Cambridge
+    - cron: "20 20 * * *" # about 3:20 or 4:20 pm
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["site/**", "pipeline/**", "package*.json", ".github/workflows/menus.yml"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: menus
+  cancel-in-progress: false
+
+jobs:
+  menus:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # If the menus can't be read, the site is still published with the
+      # menus it already has, and the run is marked failed at the end.
+      - name: Fetch and organise the menus
+        id: build
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node pipeline/build.mjs
+
+      # Saves the new menus and the cache of organised meals, so the next run
+      # only pays for meals it hasn't seen.
+      - name: Save the data
+        if: steps.build.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data pipeline/cache
+          git diff --cached --quiet || git commit -m "Menus for $(TZ=America/New_York date +%F)"
+          git push || (git pull --rebase && git push)
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Report a failed refresh
+        if: steps.build.outcome == 'failure'
+        run: |
+          echo "::error title=Menus not refreshed::The build step failed, so the site was republished with its previous menus."
+          exit 1

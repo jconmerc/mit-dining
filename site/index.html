@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIT Dining</title>
+<meta name="description" content="Every MIT dining hall's menu for the week, tidied up, with a question box.">
+<meta property="og:title" content="MIT Dining">
+<meta property="og:description" content="Every MIT dining hall's menu for the week, tidied up, with a question box.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f0e6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%231c1b19'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23f5f0e6' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  /* Cream paper and black ink by day, the reverse at night. No other colors
+     except a green for "open now". */
+  :root { --bg: #f5f0e6; --paper: #fbf8f2; --ink: #1c1b19; --soft: #6f6a60; --line: #ddd6c8; --good: #2f7a4d; --warn: #9a4a14; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d0d0d; --paper: #151515; --ink: #ecebe7; --soft: #9b988f; --line: #2b2b2b; --good: #7fd3a0; --warn: #f0b27a; }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; -webkit-text-size-adjust: 100%; }
+  a { color: inherit; text-underline-offset: 2px; }
+  button { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .page { max-width: 980px; margin: 0 auto; padding: 36px 20px 28px; }
+
+  .top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; }
+  h1 { margin: 0; font: 400 38px/1.1 "Iowan Old Style", Palatino, Georgia, serif; letter-spacing: -.01em; }
+  .line { margin: 0; color: var(--soft); }
+  .fresh { margin-left: auto; color: var(--soft); font-size: 13px; }
+
+  .ask { margin: 22px 0 26px; }
+  .askbar, .keybox form { display: flex; gap: 8px; max-width: 640px; }
+  .askbar input, .keybox input { flex: 1; min-width: 0; height: 42px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); font: inherit; font-size: 16px; outline: none; }
+  .askbar input::placeholder, .keybox input::placeholder { color: var(--soft); }
+  .askbar input:focus, .keybox input:focus { box-shadow: 0 0 0 2px var(--ink); }
+  .go { flex: none; height: 42px; padding: 0 20px; border: 1px solid var(--ink); border-radius: 6px; cursor: pointer; background: var(--ink); color: var(--bg); font-weight: 600; }
+  .go:disabled { opacity: .45; cursor: default; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .tries { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { all: unset; box-sizing: border-box; cursor: pointer; padding: 3px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); font-size: 13.5px; white-space: nowrap; }
+  .chip:hover { border-color: var(--ink); }
+  .chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .chip[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .plain { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .plain:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .chat { max-width: 760px; margin-top: 18px; }
+  .turn { margin-top: 14px; }
+  .turn .q { font-weight: 600; }
+  .turn .a { margin-top: 5px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .turn .a.wait { color: var(--soft); }
+  .turn .a.bad { color: var(--warn); }
+  .chatfoot { margin-top: 8px; display: flex; gap: 16px; color: var(--soft); font-size: 13px; }
+  .keybox { max-width: 640px; margin-top: 14px; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+  .keybox p { margin: 0 0 10px; font-size: 14px; color: var(--soft); }
+
+  .days { display: flex; gap: 4px; padding-bottom: 12px; margin-bottom: 18px; border-bottom: 1px solid var(--ink); overflow-x: auto; }
+  .pick { all: unset; box-sizing: border-box; flex: none; cursor: pointer; padding: 5px 13px 6px; border-radius: 6px; text-align: center; white-space: nowrap; }
+  .pick:hover { background: var(--line); }
+  .pick:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+  .pick[aria-pressed=true] { background: var(--ink); color: var(--bg); font-weight: 600; }
+  .pick small { display: block; font-size: 11.5px; font-weight: 400; opacity: .65; }
+
+  .days, .meals, .menu, .boxbody { scrollbar-width: none; }
+  .days::-webkit-scrollbar, .meals::-webkit-scrollbar, .menu::-webkit-scrollbar, .boxbody::-webkit-scrollbar { display: none; }
+
+  .cols { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .box { margin-bottom: 22px; }
+  .bar { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--soft); }
+  h2.bar { margin-bottom: 10px; font: 400 26px/1.15 "Iowan Old Style", Palatino, Georgia, serif; letter-spacing: -.01em; text-transform: none; color: var(--ink); }
+  .bar .hrs { margin-left: auto; font: 400 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; letter-spacing: 0; color: var(--soft); }
+  .menu { list-style: none; margin: 0; padding: 0; }
+  .menu button { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; padding: 5px 9px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+  .menu button:hover { background: var(--line); }
+  .menu button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+  .menu button[aria-pressed=true] { background: var(--ink); color: var(--bg); font-weight: 600; }
+  .menu i { font-style: normal; font-weight: 400; font-size: 12.5px; color: var(--soft); white-space: nowrap; }
+  .menu i.open { color: var(--good); }
+  .menu button[aria-pressed=true] i { color: inherit; opacity: .75; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .boxbody h4 { margin: 10px 0 5px; font-size: 13px; font-weight: 400; color: var(--soft); }
+  .boxbody h4:first-child { margin-top: 0; }
+
+  .meals { display: flex; gap: 4px; margin-bottom: 4px; overflow-x: auto; }
+  .meals .side { margin-left: auto; display: flex; gap: 4px; }
+
+  /* One hall in the side-by-side view. */
+  .hall { padding: 16px 0 18px; border-top: 1px solid var(--line); }
+  .hall header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; }
+  .hall header b { font-size: 18px; font-weight: 600; }
+  .hall header .hrs { color: var(--soft); }
+  .hall header .live { color: var(--good); }
+  .hall header .plain { margin-left: auto; font-size: 14px; }
+  .hall.shut { color: var(--soft); }
+  .heads { list-style: none; margin: 8px 0 0; padding: 0; columns: 2; column-gap: 28px; }
+  .heads li { break-inside: avoid; padding: 2px 0; }
+  .st { color: var(--soft); font-size: 13px; }
+  .tg { margin-left: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--soft); white-space: nowrap; }
+  .also { margin: 8px 0 0; color: var(--soft); font-size: 14px; }
+
+  /* A full meal at one hall. */
+  .station { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 0 14px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .station > span { color: var(--soft); font-size: 13px; padding-top: 3px; }
+  .dishes { list-style: none; margin: 0; padding: 0; }
+  .dishes li { padding: 2px 0; }
+  .dishes li.lead .dn { font-weight: 600; }
+  .dishes li.minor { color: var(--soft); font-size: 14px; }
+  .dish { all: unset; cursor: pointer; }
+  .dish:hover .dn { text-decoration: underline; text-underline-offset: 2px; }
+  .dish:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .parts, .more { margin: 1px 0 4px; color: var(--soft); font-size: 14px; }
+  .parts s { text-decoration: none; opacity: .4; }
+  button.parts { all: unset; display: block; margin: 1px 0 4px; color: var(--soft); font-size: 14px; cursor: pointer; }
+  button.parts.fold { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  button.parts.fold:hover { color: var(--ink); }
+  button.parts:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .sum { margin: 0; padding: 12px 0; border-top: 1px solid var(--line); font: italic 17px/1.4 "Iowan Old Style", Palatino, Georgia, serif; }
+  details.always { border-top: 1px solid var(--line); }
+  details.always summary { padding: 10px 0; cursor: pointer; }
+  details.always dl { margin: 0 0 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 6px 14px; font-size: 14px; }
+  details.always dt { color: var(--soft); font-size: 13px; }
+  details.always dd { margin: 0; }
+  .none { padding: 16px 0; border-top: 1px solid var(--line); color: var(--soft); }
+
+  /* A hall's whole week. */
+  .wday { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 0 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .wday > .plain { align-self: start; font-weight: 600; text-decoration: none; }
+  .wday > .plain:hover { text-decoration: underline; }
+  .wday p { margin: 0 0 4px; }
+  .wday p:last-child { margin-bottom: 0; }
+  .wday p span { color: var(--soft); font-size: 13px; }
+
+  footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--ink); color: var(--soft); font-size: 13px; }
+  footer p { margin: 0 0 3px; }
+
+  @media (max-width: 760px) {
+    .page { padding: 22px 14px 22px; }
+    h1 { font-size: 32px; }
+    .fresh { margin-left: 0; width: 100%; }
+    .cols { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    /* The side lists become rows of buttons above the menu. */
+    aside .box { margin-bottom: 12px; }
+    aside .bar { display: none; }
+    .menu { display: flex; gap: 4px; overflow-x: auto; }
+    .menu li { flex: none; }
+    .menu button { width: auto; flex-direction: column; align-items: center; gap: 0; padding: 5px 12px; }
+    .menu i { font-size: 11.5px; }
+    .boxbody { display: flex; gap: 6px; overflow-x: auto; }
+    .boxbody h4 { display: none; }
+    .chips { flex-wrap: nowrap; }
+    .chip { padding: 5px 12px; }
+    .chips + .chips { padding-left: 8px; border-left: 1px solid var(--line); }
+    main .box { margin-top: 8px; }
+    .heads { columns: 1; }
+    .station, details.always dl, .wday { grid-template-columns: minmax(0, 1fr); }
+    .station > span, details.always dt { padding: 0 0 2px; font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+    details.always dt { margin-top: 6px; }
+    .wday > .plain { margin-bottom: 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <h1>MIT Dining</h1>
+    <span class="fresh" id="fresh"></span>
+  </header>
+
+  <section class="ask" aria-label="Ask about the menus">
+    <form class="askbar" id="askform">
+      <input id="askq" type="text" autocomplete="off" enterkeyhint="send" placeholder="Ask anything about this week's menus" aria-label="Ask about this week's menus">
+      <button class="go" id="askgo" type="submit">Ask</button>
+    </form>
+    <div class="tries" id="tries"></div>
+    <div class="keybox" id="keybox" hidden>
+      <p>Answers come from Claude, using your own API key. Paste it once and it stays in this browser. It is only ever sent to Anthropic. <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">Get a key</a></p>
+      <form id="keyform"><input id="keyin" type="password" autocomplete="off" placeholder="sk-ant-..." aria-label="Claude API key"><button class="go" type="submit">Save</button></form>
+    </div>
+    <div class="chat" id="chat" hidden>
+      <div id="turns"></div>
+      <div class="chatfoot"><button class="plain" id="clear" type="button">Clear</button><button class="plain" id="forget" type="button">Forget my key</button></div>
+    </div>
+  </section>
+
+  <nav class="days" id="days" aria-label="Day"></nav>
+
+  <div class="cols">
+    <aside>
+      <div class="box"><h3 class="bar">Halls</h3><ul class="menu" id="halls"></ul></div>
+      <div class="box"><h3 class="bar">Show</h3><div class="boxbody">
+        <h4>Only</h4><div class="chips" id="diet"></div>
+        <h4>Without</h4><div class="chips" id="avoid"></div>
+      </div></div>
+    </aside>
+    <main>
+      <div class="box"><h2 class="bar" id="title">Menus</h2><div class="meals" id="meals" hidden></div><div id="view"><div class="none">Loading menus...</div></div></div>
+    </main>
+  </div>
+
+  <footer>
+    <p id="foot">Diet and allergen labels are the halls' own. Ask the staff if it matters.</p>
+    <p>An unofficial reader for <a href="https://mit.cafebonappetit.com/" target="_blank" rel="noopener">MIT Dining's menus</a>.</p>
+  </footer>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
